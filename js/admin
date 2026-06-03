@@ -1,0 +1,356 @@
+// js/admin.js
+// منطق لوحة الإدارة الشامل — يُستخدم في admin.html فقط
+
+const ADMIN_PASSWORD = 'admin123';
+let adminAuthed      = false;
+let orderFilter      = '';
+let prodCatFilter    = 0;
+
+function adminLogin(e) {
+  e.preventDefault();
+  const pass = document.getElementById('admin-pass').value;
+  if (pass !== ADMIN_PASSWORD) {
+    showAdminToast('كلمة المرور غير صحيحة', 'error');
+    return;
+  }
+  adminAuthed = true;
+  localStorage.setItem('faqous_admin_auth', '1');
+  document.getElementById('admin-login').classList.add('hidden');
+  document.getElementById('admin-dashboard').classList.remove('hidden');
+  initAdminDashboard();
+}
+
+function adminLogout() {
+  adminAuthed = false;
+  localStorage.removeItem('faqous_admin_auth');
+  document.getElementById('admin-login').classList.remove('hidden');
+  document.getElementById('admin-dashboard').classList.add('hidden');
+  document.getElementById('admin-pass').value = '';
+}
+
+function checkAdminAuth() {
+  if (localStorage.getItem('faqous_admin_auth') === '1') {
+    adminAuthed = true;
+    document.getElementById('admin-login').classList.add('hidden');
+    document.getElementById('admin-dashboard').classList.remove('hidden');
+    initAdminDashboard();
+  }
+}
+
+function showAdminToast(msg, type = 'default', duration = 3000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el        = document.createElement('div');
+  const icons     = { success: '✅', error: '❌', default: 'ℹ️' };
+  el.className    = `toast toast-${type}`;
+  el.innerHTML    = `<span>${icons[type] || ''}</span><span>${msg}</span>`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity    = '0';
+    el.style.transform  = 'translateY(20px)';
+    el.style.transition = 'all .3s';
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+function openModal(title, bodyHTML, large = false) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML    = bodyHTML;
+  document.getElementById('modal-box').className     = large ? 'modal-box modal-lg' : 'modal-box';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+function showAdminPage(page, linkEl) {
+  document.querySelectorAll('.admin-page').forEach(p => p.classList.add('hidden'));
+  document.getElementById(`admin-page-${page}`).classList.remove('hidden');
+
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  if (linkEl) linkEl.classList.add('active');
+
+  const titles = { dashboard: 'الرئيسية', orders: 'الطلبات المعلقة', products: 'المنتجات والتسعير', settings: 'إعدادات المتجر' };
+  document.getElementById('admin-page-title').textContent = titles[page] || '';
+
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'orders')    renderOrders();
+  if (page === 'products')  renderProducts();
+  if (page === 'settings')  loadSettings();
+}
+
+function initAdminDashboard() {
+  renderDashboard();
+  loadSettings();
+
+  document.getElementById('modal-overlay').addEventListener('click', function (e) {
+    if (e.target === this) closeModal();
+  });
+
+  setInterval(() => {
+    loadData();
+    const activePage = document.querySelector('.admin-page:not(.hidden)');
+    if (activePage?.id === 'admin-page-dashboard') renderDashboard();
+    if (activePage?.id === 'admin-page-orders')    renderOrders();
+  }, 20000);
+}
+
+function renderDashboard() {
+  loadData();
+  const today = new Date().toDateString();
+
+  const newCount     = DB.orders.filter(o => o.status === 'جديد').length;
+  const todayCount   = DB.orders.filter(o => new Date(o.createdAt).toDateString() === today).length;
+  const activeProds  = DB.products.filter(p => p.active).length;
+  const totalSales   = DB.orders.filter(o => o.status === 'تم التسليم').reduce((s, o) => s + o.total, 0);
+
+  document.getElementById('stat-new').textContent      = newCount;
+  document.getElementById('stat-today').textContent    = todayCount;
+  document.getElementById('stat-products').textContent = activeProds;
+  document.getElementById('stat-sales').textContent    = totalSales.toFixed(0) + ' ج';
+
+  const el = document.getElementById('dash-recent-orders');
+  if (!DB.orders.length) {
+    el.innerHTML = `<p style="text-align:center;padding:20px;color:#9ca3af;font-size:14px">لا توجد طلبات واردة حتى الآن</p>`;
+    return;
+  }
+
+  el.innerHTML = DB.orders.slice(0, 5).map(o => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--gray-100);">
+      <div>
+        <p style="font-weight:700;">طلب #${o.id} — ${o.fullName}</p>
+        <p style="font-size:12px;color:var(--gray-500)">${formatTime(o.createdAt)}</p>
+      </div>
+      <span class="${getStatusClass(o.status)}">${o.status}</span>
+      <span style="font-weight:800;color:var(--green)">${o.total.toFixed(2)} ج</span>
+    </div>
+  `).join('');
+}
+
+// إدارة الطلبات وتحويل حالتها
+const ALL_STATUSES = ['جديد', 'جاري التجهيز', 'خرج للتوصيل', 'تم التسليم', 'ملغي'];
+
+function renderOrders() {
+  loadData();
+
+  document.getElementById('order-filters').innerHTML = ['', ...ALL_STATUSES].map(s => `
+    <button class="filter-pill ${orderFilter === s ? 'active' : ''}" onclick="setOrderFilter('${s}')">${s || 'الكل'}</button>
+  `).join('');
+
+  const list = document.getElementById('orders-list');
+  const filtered = orderFilter ? DB.orders.filter(o => o.status === orderFilter) : DB.orders;
+
+  if (!filtered.length) {
+    list.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">لا توجد طلبات تطابق هذا الفلتر.</td></tr>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(o => `
+    <tr>
+      <td><b>#${o.id}</b></td>
+      <td>${o.fullName}</td>
+      <td>${o.zone}</td>
+      <td>${formatTime(o.createdAt)}</td>
+      <td><span class="${getStatusClass(o.status)}">${o.status}</span></td>
+      <td><b>${o.total.toFixed(2)} ج</b></td>
+      <td><button class="btn btn-outline btn-sm" onclick="viewOrderDetails(${o.id})">👁️ فتح وتحكم</button></td>
+    </tr>
+  `).join('');
+}
+
+function setOrderFilter(s) { orderFilter = s; renderOrders(); }
+
+function viewOrderDetails(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+
+  const itemsLines = o.items.map(i => `<li>• ${i.name} — ${i.qty} × ${i.price} = ${(i.qty * i.price).toFixed(2)} ج</li>`).join('');
+  const statusButtons = ALL_STATUSES.map(s => `
+    <button class="btn btn-sm ${o.status === s ? 'btn-primary' : 'btn-ghost'}" onclick="updateOrderStatus(${o.id}, '${s}')">${s}</button>
+  `).join(' ');
+
+  const html = `
+    <div style="font-size:14px; display:flex; flex-direction:column; gap:12px;">
+      <p><b>اسم العميل:</b> ${o.fullName}</p>
+      <p><b>رقم الهاتف:</b> ${o.whatsapp}</p>
+      <p><b>العنوان:</b> ${o.zone} — ${o.street} — منزل ${o.houseNumber} ${o.floor ? '— دور ' + o.floor : ''}</p>
+      <div style="background:var(--gray-50); padding:10px; border-radius:8px;">
+        <p><b>المنتجات المطلوبة:</b></p>
+        <ul style="list-style:none; padding-top:6px;">${itemsLines}</ul>
+      </div>
+      <p><b>تكلفة المنتجات:</b> ${o.subtotal.toFixed(2)} ج | <b>التوصيل:</b> ${o.deliveryFee.toFixed(2)} ج</p>
+      <p style="font-size:16px; color:var(--green)"><b>الإجمالي الكلي:</b> ${o.total.toFixed(2)} ج</p>
+      <hr style="border:none; border-top:1px solid var(--gray-200);">
+      <p><b>تغيير حالة الطلب الحالية:</b></p>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">${statusButtons}</div>
+      <button class="btn btn-outline btn-md" style="margin-top:10px;" onclick="sendOrderWhatsApp(${o.id})">💬 إرسال الفاتورة عبر واتساب</button>
+    </div>
+  `;
+  openModal(`تفاصيل التحكم بالطلب #${o.id}`, html);
+}
+
+function updateOrderStatus(id, newStatus) {
+  const o = DB.orders.find(x => x.id === id);
+  if (o) {
+    o.status = newStatus;
+    saveData();
+    renderOrders();
+    showAdminToast(`تم تغيير الحالة إلى ${newStatus}`, 'success');
+    closeModal();
+  }
+}
+
+function sendOrderWhatsApp(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  const text = encodeURIComponent(buildWhatsAppText(o));
+  window.open(`https://wa.me/${o.whatsapp}?text=${text}`, '_blank');
+}
+
+// إدارة وقائمة المنتجات (مع إضافة حقل الصورة URL بخلفية بيضاء)
+function renderProducts() {
+  loadData();
+
+  document.getElementById('prod-cat-filters').innerHTML = [{ id: 0, name: 'الكل' }, ...DB.categories].map(c => `
+    <button class="filter-pill ${prodCatFilter === c.id ? 'active' : ''}" onclick="setProdCatFilter(${c.id})">${c.name}</button>
+  `).join('');
+
+  const list = document.getElementById('admin-products-list');
+  const filtered = prodCatFilter ? DB.products.filter(p => p.catId === prodCatFilter) : DB.products;
+
+  list.innerHTML = filtered.map(p => `
+    <tr>
+      <td>
+        <div style="width:40px; height:40px; background:#fff; border:1px solid var(--gray-200); border-radius:6px; display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:20px;">
+          ${p.img ? `<img src="${p.img}" style="width:100%; height:100%; object-fit:cover;">` : p.icon}
+        </div>
+      </td>
+      <td><b>${p.name}</b></td>
+      <td>${p.price} ج</td>
+      <td>${p.unit}</td>
+      <td>
+        <button class="status ${p.active ? 'status-done' : 'status-cancel'}" onclick="toggleProductActive(${p.id})">
+          ${p.active ? 'نشط (إخفاء)' : 'مخفي (تنشيط)'}
+        </button>
+      </td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openEditProductModal(${p.id})">📝 تعديل</button></td>
+    </tr>
+  `).join('');
+}
+
+function setProdCatFilter(id) { prodCatFilter = id; renderProducts(); }
+
+function toggleProductActive(id) {
+  const p = DB.products.find(x => x.id === id);
+  if (p) {
+    p.active = !p.active;
+    saveData();
+    renderProducts();
+    showAdminToast('تم تحديث حالة ظهور المنتج بالمتجر', 'success');
+  }
+}
+
+// نافذة إضافة وتعديل المنتجات (تدعم حقل الصورة بالكامل ورابط الـ URL الفعلي)
+function openAddProductModal() {
+  const catOptions = DB.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div class="form-group"><label class="form-label">اسم المنتج</label><input class="input" id="p-name" required placeholder="طماطم شيري، بانيه..." /></div>
+      <div class="form-group"><label class="form-label">القسم</label><select class="input" id="p-cat">${catOptions}</select></div>
+      <div class="form-group"><label class="form-label">السعر (جنيه)</label><input class="input" id="p-price" type="number" step="0.01" required /></div>
+      <div class="form-group"><label class="form-label">الوحدة</label><input class="input" id="p-unit" value="كيلو" required /></div>
+      <div class="form-group"><label class="form-label">رمز تعبيري بديل (Emoji)</label><input class="input" id="p-icon" value="🥦" /></div>
+      <div class="form-group">
+        <label class="form-label">رابط صورة المنتج (خلفية بيضاء)</label>
+        <input class="input" id="p-img" placeholder="https://example.com/image.jpg" />
+      </div>
+      <button class="btn btn-primary btn-md w-full" style="margin-top:10px;" onclick="saveNewProduct()">✨ إضافة المنتج الجديد</button>
+    </div>
+  `;
+  openModal('إضافة منتج جديد للمتجر', html);
+}
+
+function saveNewProduct() {
+  const name = document.getElementById('p-name').value.trim();
+  const price = parseFloat(document.getElementById('p-price').value);
+  if (!name || isNaN(price)) { showAdminToast('يرجى ملء الحقول المطلوبة بشكل صحيح', 'error'); return; }
+
+  const newP = {
+    id: Date.now(),
+    catId: parseInt(document.getElementById('p-cat').value),
+    name: name,
+    price: price,
+    unit: document.getElementById('p-unit').value.trim(),
+    icon: document.getElementById('p-icon').value.trim(),
+    img: document.getElementById('p-img').value.trim(),
+    active: true
+  };
+
+  DB.products.push(newP);
+  saveData();
+  renderProducts();
+  showAdminToast('تمت إضافة المنتج الجديد بنجاح', 'success');
+  closeModal();
+}
+
+function openEditProductModal(id) {
+  const p = DB.products.find(x => x.id === id);
+  if (!p) return;
+
+  const catOptions = DB.categories.map(c => `<option value="${c.id}" ${c.id === p.catId ? 'selected' : ''}>${c.name}</option>`).join('');
+  const html = `
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <input type="hidden" id="edit-p-id" value="${p.id}">
+      <div class="form-group"><label class="form-label">اسم المنتج</label><input class="input" id="p-name" value="${p.name}" required /></div>
+      <div class="form-group"><label class="form-label">القسم</label><select class="input" id="p-cat">${catOptions}</select></div>
+      <div class="form-group"><label class="form-label">السعر (جنيه)</label><input class="input" id="p-price" type="number" step="0.01" value="${p.price}" required /></div>
+      <div class="form-group"><label class="form-label">الوحدة</label><input class="input" id="p-unit" value="${p.unit}" required /></div>
+      <div class="form-group"><label class="form-label">رمز تعبيري (Emoji)</label><input class="input" id="p-icon" value="${p.icon}" /></div>
+      <div class="form-group">
+        <label class="form-label">رابط صورة المنتج (خلفية بيضاء)</label>
+        <input class="input" id="p-img" value="${p.img || ''}" placeholder="https://example.com/image.jpg" />
+      </div>
+      <button class="btn btn-primary btn-md w-full" style="margin-top:10px;" onclick="saveEditedProduct()">💾 حفظ التعديلات</button>
+    </div>
+  `;
+  openModal(`تعديل المنتج: ${p.name}`, html);
+}
+
+function saveEditedProduct() {
+  const id = parseInt(document.getElementById('edit-p-id').value);
+  const p = DB.products.find(x => x.id === id);
+  if (!p) return;
+
+  const name = document.getElementById('p-name').value.trim();
+  const price = parseFloat(document.getElementById('p-price').value);
+  if (!name || isNaN(price)) { showAdminToast('يرجى التحقق من الحقول المكتوبة', 'error'); return; }
+
+  p.name = name;
+  p.catId = parseInt(document.getElementById('p-cat').value);
+  p.price = price;
+  p.unit = document.getElementById('p-unit').value.trim();
+  p.icon = document.getElementById('p-icon').value.trim();
+  p.img = document.getElementById('p-img').value.trim();
+
+  saveData();
+  renderProducts();
+  showAdminToast('تم تحديث بيانات المنتج بنجاح', 'success');
+  closeModal();
+}
+
+// صفحة الإعدادات
+function loadSettings() {
+  document.getElementById('set-name').value = DB.settings.storeName;
+  document.getElementById('set-wa').value   = DB.settings.whatsapp;
+  document.getElementById('set-fee').value  = DB.settings.deliveryFee;
+}
+
+function saveSettings() {
+  DB.settings.storeName   = document.getElementById('set-name').value.trim();
+  DB.settings.whatsapp    = document.getElementById('set-wa').value.trim();
+  DB.settings.deliveryFee = parseFloat(document.getElementById('set-fee').value) || 0;
+  
+  saveData();
+  showAdminToast('تم حفظ الإعدادات بنجاح', 'success');
+}
