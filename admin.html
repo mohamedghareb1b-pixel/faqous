@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة الإدارة — سوق فاقوس</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:        #16a34a;
+      --green-dark:   #15803d;
+      --green-light:  #dcfce7;
+      --green-bg:     #f0fdf4;
+      --white:        #ffffff;
+      --gray-50:      #f9fafb;
+      --gray-100:     #f3f4f6;
+      --gray-200:     #e5e7eb;
+      --gray-400:     #9ca3af;
+      --gray-500:     #6b7280;
+      --gray-700:     #374151;
+      --gray-900:     #111827;
+      --red:          #ef4444;
+      --shadow-sm:    0 1px 3px rgba(0,0,0,.08);
+      --shadow-md:    0 4px 16px rgba(0,0,0,.12);
+      --radius:       16px;
+      --radius-sm:    10px;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      min-height: 100vh;
+    }
+    button { cursor: pointer; font-family: inherit; border: none; background: none; }
+    input, textarea, select { font-family: inherit; }
+
+    /* ── Utilities ── */
+    .hidden { display: none !important; }
+    .w-full { width: 100%; }
+
+    /* ── Toast ── */
+    #toast-container {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none; min-width: 260px;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+      border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+      color: #fff; box-shadow: var(--shadow-md); animation: toastIn .3s ease; pointer-events: all;
+    }
+    .toast-default { background: var(--gray-900); }
+    .toast-success { background: var(--green); }
+    .toast-error   { background: var(--red); }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.5); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-box {
+      background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-md);
+      width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-box.modal-lg { max-width: 720px; }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between; padding: 16px 20px;
+      border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; background: var(--white); z-index: 2;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .modal-close {
+      width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex;
+      align-items: center; justify-content: center; font-size: 18px; color: var(--gray-500);
+    }
+    .modal-close:hover { background: var(--gray-100); }
+    .modal-body { padding: 20px; }
+
+    /* ── Card ── */
+    .card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); }
+
+    /* ── Inputs / Buttons ── */
+    .input {
+      width: 100%; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm);
+      padding: 10px 14px; font-size: 14px; outline: none; background: var(--white);
+    }
+    .input:focus { border-color: var(--green); }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 13px; font-weight: 600; color: var(--gray-700); }
+    
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; border-radius: var(--radius-sm); transition: all .2s; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-md { padding: 9px 16px; font-size: 14px; }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-ghost { color: var(--gray-700); }
+    .btn-ghost:hover { background: var(--gray-100); }
+    .btn-outline { border: 1.5px solid var(--green); color: var(--green); }
+    .btn-outline:hover { background: var(--green-bg); }
+
+    /* ── Login Layout ── */
+    .login-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
+    .login-box { background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); width: 100%; max-width: 400px; padding: 32px 24px; box-shadow: var(--shadow-md); }
+
+    /* ── Dashboard Layout ── */
+    .admin-wrapper { display: flex; min-height: 100vh; }
+    .admin-sidebar {
+      width: 220px; background: var(--white); border-left: 1px solid var(--gray-200);
+      display: flex; flex-direction: column; padding: 20px 0; position: fixed; height: 100vh; right: 0; top: 0; z-index: 90;
+    }
+    .sidebar-brand { padding: 0 20px 20px; border-bottom: 1px solid var(--gray-100); margin-bottom: 20px; }
+    .sidebar-logo-text { font-size: 17px; font-weight: 800; color: var(--green); }
+    .sidebar-nav { flex: 1; padding: 0 10px; }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 500; color: var(--gray-700); width: 100%; text-align: right; margin-bottom: 4px;
+    }
+    .nav-link:hover { background: var(--gray-50); color: var(--gray-900); }
+    .nav-link.active { background: var(--green-bg); color: var(--green); font-weight: 700; }
+
+    .admin-main { flex: 1; margin-right: 220px; display: flex; flex-direction: column; min-height: 100vh; }
+    .admin-header { background: var(--white); border-bottom: 1px solid var(--gray-200); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 80; }
+    .admin-content { padding: 24px; flex: 1; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+    /* ── Stats ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 16px; display: flex; align-items: center; gap: 14px; }
+    .stat-icon-box { width: 44px; height: 44px; border-radius: 10px; background: var(--green-bg); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .stat-num { font-size: 20px; font-weight: 800; }
+    .stat-label { font-size: 12px; color: var(--gray-500); }
+
+    /* ── Tables & List ── */
+    .table-wrap { overflow-x: auto; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; text-align: right; font-size: 14px; }
+    th { background: var(--gray-50); padding: 12px 16px; font-weight: 700; color: var(--gray-700); border-bottom: 1px solid var(--gray-200); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); color: var(--gray-900); vertical-align: middle; }
+    
+    .status { display: inline-flex; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+    .status-new { background: #fee2e2; color: #ef4444; }
+    .status-prep { background: #fef3c7; color: #d97706; }
+    .status-delivery { background: #e0f2fe; color: #0284c7; }
+    .status-done { background: #dcfce7; color: #16a34a; }
+    .status-cancel { background: #f3f4f6; color: #515866; }
+
+    .filter-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px; }
+    .filter-pill { padding: 6px 14px; background: var(--white); border: 1px solid var(--gray-200); border-radius: 99px; font-size: 13px; font-weight: 600; color: var(--gray-700); }
+    .filter-pill.active { background: var(--green); color: #fff; border-color: var(--green); }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+
+  <div class="login-container" id="admin-login">
+    <div class="login-box">
+      <h2 style="text-align:center;margin-bottom:20px;font-weight:800;">دخول الإدارة</h2>
+      <form onsubmit="adminLogin(event)">
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">كلمة مرور الإدارة</label>
+          <input class="input" id="admin-pass" type="password" required placeholder="••••••••" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-md w-full">تسجيل الدخول</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="admin-wrapper hidden" id="admin-dashboard">
+    <aside class="admin-sidebar">
+      <div class="sidebar-brand">
+        <p class="sidebar-logo-text">سوق فاقوس 💼</p>
+        <p style="font-size:11px;color:var(--gray-500)">لوحة التحكم والتجهيز</p>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-link active" onclick="showAdminPage('dashboard', this)">📊 الرئيسية</button>
+        <button class="nav-link" onclick="showAdminPage('orders', this)">📦 الطلبات المعلقة</button>
+        <button class="nav-link" onclick="showAdminPage('products', this)">🥦 المنتجات والتسعير</button>
+        <button class="nav-link" onclick="showAdminPage('settings', this)">⚙️ إعدادات المتجر</button>
+      </nav>
+      <div style="padding:0 10px;"><button class="nav-link" style="color:var(--red)" onclick="adminLogout()">🚪 خروج</button></div>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-header">
+        <h1 id="admin-page-title" style="font-size:18px;font-weight:800;">الرئيسية</h1>
+        <div style="font-weight:600; font-size:14px; color:var(--gray-500)">مرحباً بك يا غالي 👋</div>
+      </header>
+
+      <div class="admin-content">
+        
+        <div class="admin-page" id="admin-page-dashboard">
+          <div class="stats-grid">
+            <div class="card stat-card"><div class="stat-icon-box">🔔</div><div><p class="stat-num" id="stat-new">0</p><p class="stat-label">طلبات جديدة</p></div></div>
+            <div class="card stat-card"><div class="stat-icon-box">📅</div><div><p class="stat-num" id="stat-today">0</p><p class="stat-label">طلبات اليوم</p></div></div>
+            <div class="card stat-card"><div class="stat-icon-box">🛒</div><div><p class="stat-num" id="stat-products">0</p><p class="stat-label">منتج نشط</p></div></div>
+            <div class="card stat-card"><div class="stat-icon-box">💰</div><div><p class="stat-num" id="stat-sales">0 ج</p><p class="stat-label">أرباح تم تسليمها</p></div></div>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="margin-bottom:14px; font-weight:800;">آخر 5 طلبات واردة</h3>
+            <div id="dash-recent-orders"></div>
+          </div>
+        </div>
+
+        <div class="admin-page hidden" id="admin-page-orders">
+          <div class="filter-row" id="order-filters"></div>
+          <div class="card" style="padding:16px">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>رقم الطلب</th>
+                    <th>العميل</th>
+                    <th>المنطقة</th>
+                    <th>الوقت</th>
+                    <th>الحالة</th>
+                    <th>الإجمالي</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-page hidden" id="admin-page-products">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div class="filter-row" id="prod-cat-filters" style="margin-bottom:0"></div>
+            <button class="btn btn-primary btn-md" onclick="openAddProductModal()">➕ إضافة منتج جديد</button>
+          </div>
+          <div class="card" style="padding:16px">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>الصورة</th>
+                    <th>الاسم</th>
+                    <th>السعر</th>
+                    <th>الوحدة</th>
+                    <th>الحالة</th>
+                    <th>تعديل</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-products-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-page hidden" id="admin-page-settings">
+          <div class="card" style="padding:24px; max-width:600px;">
+            <h3 style="margin-bottom:20px; font-weight:800;">إعدادات المتجر العامة</h3>
+            <div style="display:flex; flex-direction:column; gap:16px">
+              <div class="form-group">
+                <label class="form-label">اسم المتجر</label>
+                <input class="input" id="set-name" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم الواتساب لاستلام رسائل الطلبات</label>
+                <input class="input" id="set-wa" placeholder="مثال: 201012345678" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">تكلفة التوصيل الثابتة (جنيه)</label>
+                <input class="input" id="set-fee" type="number" />
+              </div>
+              <button class="btn btn-primary btn-md" style="margin-top:10px" onclick="saveSettings()">💾 حفظ التغييرات</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal-box" id="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title" id="modal-title">تفاصيل</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="js/db.js"></script>
+  <script src="js/admin.js"></script>
+  <script>
+    // التحقق التلقائي من تسجيل الدخول
+    checkAdminAuth();
+  </script>
+</body>
+</html>
