@@ -1,5 +1,5 @@
 // تكوين والاتصال بسيرفر Supabase السحابي الموحد
-const SUPABASE_URL = "https://ssumsqxmaqouivamvaw.supabase.co";
+const SUPABASE_URL = "https://ssumsqxmaqoiuivamvaw.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzdW1zcXhtYXFvaXVpdmFtdmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTEwMzcsImV4cCI6MjA5NjA4NzAzN30.GPplQ7IOExRJOnvRFaNV5suoRS-TkzWZ7iTG3tlxN7U";
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
