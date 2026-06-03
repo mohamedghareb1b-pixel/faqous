@@ -1,8 +1,0 @@
-/* تنسيقات مخصصة لإخفاء أشرطة التمرير والجماليات للمتجر */
-.scrollbar-none::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-none {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
